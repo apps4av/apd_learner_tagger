@@ -1,3 +1,5 @@
+Adopted from Mike Rieker's C# script
+
 # apd_learner_tagger
 
 Georeferences FAA airport diagrams and publishes `avare_aptdiags.php` for the tpp build.
