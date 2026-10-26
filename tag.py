@@ -2,6 +2,7 @@
 # the 13-field geotag file tpp reads:
 #   faaid,tfwA,tfwB,tfwC,tfwD,tfwE,tfwF,wftA,wftB,wftC,wftD,wftE,wftF
 
+import multiprocessing
 import os
 import re
 import shutil
@@ -9,16 +10,16 @@ import subprocess
 import urllib.request
 import xml.etree.ElementTree as et
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import cycle
 from read_arpt_dgm_png import ArptDgmPng, _csv_line
 
 FAA_PAGE = "https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/dtpp/"
-LEARNT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ReadArptDgmPng_learnt.csv")
-WORK = os.environ.get("WORK", "/tmp/dtpp")
-OUT = os.environ.get("OUT", "/out")
-WORKERS = int(os.environ.get("WORKERS", "4"))
+LEARNT = "ReadArptDgmPng_learnt.csv"
+WORK = os.environ.get("WORK", "work")
+OUT = os.environ.get("OUT", "out")
+WORKERS = 4
 
 GS = [
     "gs", "-q", "-dQuiet", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMT",
@@ -86,8 +87,21 @@ def apd_jobs():
     return jobs
 
 
+_progress = None
+
+
+def _init_progress(counter, lock, total):
+    global _progress
+    _progress = (counter, lock, total)
+
+
 def tag_one(job):
     faa, icao, pdf = job
+    counter, lock, total = _progress
+    with lock:
+        counter.value += 1
+        n = counter.value
+    print("%d/%d %s %s" % (n, total, faa, pdf), flush=True)
     pdf_path = os.path.join(WORK, pdf)
     png = os.path.join(WORK, "apd_" + faa + ".png")
     try:
@@ -116,19 +130,18 @@ def main():
 
     lines = []
     failed = 0
-    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+    counter = multiprocessing.Value("i", 0)
+    lock = multiprocessing.Lock()
+    with ProcessPoolExecutor(max_workers=WORKERS, initializer=_init_progress,
+                             initargs=(counter, lock, len(jobs))) as pool:
         futures = [pool.submit(tag_one, job) for job in jobs]
-        done = 0
         for future in as_completed(futures):
             faa, line, error = future.result()
-            done += 1
             if line:
                 lines.append(line)
             else:
                 failed += 1
                 print("skip", faa + ":", error, flush=True)
-            if done % 25 == 0 or done == len(jobs):
-                print("tagged %d/%d" % (done, len(jobs)), flush=True)
 
     if not lines:
         raise SystemExit("no airport diagrams were tagged")
