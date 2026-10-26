@@ -2,7 +2,7 @@
 
 Georeferences FAA airport diagrams and publishes `avare_aptdiags.php` for the tpp build.
 
-The scheduled run starts at 05:00 America/New_York on the Sunday of an FAA release week, two hours before tpp. It writes the file to `https://www.apps4av.org/regions/avare_aptdiags.php`.
+The scheduled run starts at 05:00 America/New_York on the Sunday of an FAA release week, two hours before tpp. It writes the file to `https://www.apps4av.org/new/staging/avare_aptdiags.php`.
 
 ```bash
 ./run.sh
